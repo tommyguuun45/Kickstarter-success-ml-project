@@ -2,60 +2,72 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
 from sklearn.linear_model import LinearRegression
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.ensemble import VotingClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.datasets import make_classification
+from sklearn.model_selection import cross_val_score
+import xgboost as xgb
 import pickle
 import warnings
 warnings.filterwarnings('ignore')
+RSEED = 42
 
-from feature_engineering import fill_missing_values, drop_column, transform_altitude
+from data_cleaning_feature_engineering import extract_dict_item, drop_column, filter_transform_target, round_values, make_encode
 
-# coffee data
-url="https://github.com/jldbc/coffee-quality-database/raw/master/data/robusta_data_cleaned.csv"
-coffee_features=pd.read_csv(url)
+#kickstarter data 
+kickstarter = pd.read_csv('data/kickstarter_preprocessed.csv')
 
-# coffee score
+##feature eng on test data
+#print("Feature engineering on train")
+#X_train = transform_altitude(X_train)
+#X_train = drop_column(X_train, col_name='Unnamed: 0')
+#X_train = drop_column(X_train, col_name='Quakers')
+#X_train = fill_missing_values(X_train)
 
-url="https://raw.githubusercontent.com/jldbc/coffee-quality-database/master/data/robusta_ratings_raw.csv"
-coffee_quality=pd.read_csv(url)
-
-
-#cleaning data and preparing
-Y = coffee_quality["quality_score"]
-X = coffee_features.select_dtypes(['number'])
+#preparing data and define target and feature
+X = kickstarter.drop('state', axis= 1)
+y = kickstarter['state']
+print('Our target is: state')
 
 
 # splittin into train and test
-X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.30, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split( X, y, test_size=0.33, stratify = y, random_state=RSEED)
+'''We stratify the test split because we have an imbalance in the state column of the dataset'''
 ## in order to exemplify how the predict will work.. we will save the y_train
 print("Saving test data in the data folder")
 X_test.to_csv("data/X_test.csv", index=False)
 y_test.to_csv("data/y_test.csv", index=False)
 
-print("Feature engineering on train")
-X_train = transform_altitude(X_train)
-X_train = drop_column(X_train, col_name='Unnamed: 0')
-X_train = drop_column(X_train, col_name='Quakers')
-X_train = fill_missing_values(X_train)
+##feature eng on test data
+#print("Feature engineering on train")
+#X_train = transform_altitude(X_train)
+#X_train = drop_column(X_train, col_name='Unnamed: 0')
+#X_train = drop_column(X_train, col_name='Quakers')
+#X_train = fill_missing_values(X_train)
 
 # model
-print("Training a simple linear regression")
-reg = LinearRegression().fit(X_train, y_train)
-y_train_pred = reg.predict(X_train)
-mse_train = mean_squared_error(y_train, y_train_pred)
+print("Training XGBoost Classifier")
+boost = xgb.XGBClassifier( base_score = 0.5, learning_rate = 0.1, max_depth = 8, n_estimators = 200, random_state=RSEED)
+model_xgboost= boost.fit(X_train,y_train)
 
 #feature eng on test data
-print("Feature engineering on test")
-X_test = transform_altitude(X_test)
-X_test = drop_column(X_test, col_name='Unnamed: 0')
-X_test = drop_column(X_test, col_name='Quakers')
-X_test = fill_missing_values(X_test)
+#print("Feature engineering on test")
+#X_test = transform_altitude(X_test)
+#X_test = drop_column(X_test, col_name='Unnamed: 0')
+#X_test = drop_column(X_test, col_name='Quakers')
+#X_test = fill_missing_values(X_test)
 
-y_test_pred = reg.predict(X_test)
-mse_test = mean_squared_error(y_test, y_test_pred)
+y_pred_boost = boost.predict(X_test)
 
-print (f"MSE on train is: {mse_train}")
-print (f"MSE on test is: {mse_test}")
-print("this is obviously fishy")
+# building confusion matrix
+cfm_train = confusion_matrix(y_train,y_pred_boost)
+cfm_test = confusion_matrix(y_test,y_pred_boost)
+
+print ('Confusion Matrix of train_data of XGBoost:', cfm_train)
+print ('Confusion Matrix of test_data of XGBoost:', cfm_test)
+print("thats quite good")
 #saving the model
 print("Saving model in the model folder")
-filename = 'models/linear_regression_model.sav'
-pickle.dump(reg, open(filename, 'wb'))
+filename = 'models/model_xgboost.sav'
+pickle.dump(boost, open(filename, 'wb'))

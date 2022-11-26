@@ -1,6 +1,9 @@
 import pandas as pd
 import numpy as np
 import ast
+import pickle
+
+
 
 def extract_dict_item(df:pd.DataFrame)-> pd.DataFrame:
     '''
@@ -43,3 +46,4 @@ def make_encode(df:pd.DataFrame) -> pd.DataFrame:
     df = df.reset_index(drop = True)
     df = pd.get_dummies(df, columns=["country", "currency", "current_currency", "staff_pick", "usd_type","category_slug"])
     return df
+    
