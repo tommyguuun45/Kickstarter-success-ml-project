@@ -1,32 +1,54 @@
-import sys
-import pandas as pd
 import pickle
-from sklearn.metrics import mean_squared_error
-import warnings
-warnings.filterwarnings('ignore')
+from pathlib import Path
+import pandas as pd
+import typer
+import glob
+import os
+from example_files.data_cleaning_feature_engineering import preprocessing
 
-from data_cleaning_feature_engineering import extract_dict_item, drop_column, filter_transform_target, round_values, make_encode
+def load_ressources():
+    with open("models/model_xgboost.sav", "rb") as model_xgboost:
+        model = pickle.load(model_xgboost)
+    return model
 
-print('Number of arguments:', len(sys.argv), 'arguments.')
-print('Argument List:', str(sys.argv)) 
 
-#in an ideal world this would validated
-model = sys.argv[1]
-X_test_path = sys.argv[2]
-y_test_path = sys.argv[3]
+app = typer.Typer()
 
-# load the model from disk
-loaded_model = pickle.load(open(model, 'rb'))
-X_test = pd.read_csv(X_test_path)
-y_test = pd.read_csv(y_test_path)
 
-#feature eng on test data
-#print("Feature engineering")
-#X_test = transform_altitude(X_test)
-#X_test = drop_column(X_test, col_name='Unnamed: 0')
-#X_test = drop_column(X_test, col_name='Quakers')
-#X_test = fill_missing_values(X_test)
+@app.command()
+def predict(path: Path):
+    """
+    Command line command that can be executed with a parameter
+    """
+    model = load_ressources()
+    # TODO write code to use model and return predictions
+    print('Loading the files...')
+    all_files = glob.glob(os.path.join(path , "*.csv"))
+    li = []
+    for filename in all_files:
+        df = pd.read_csv(filename, index_col=None, header=0)
+        li.append(df)
+    df = pd.concat(li, axis=0, ignore_index=True)
+    print('Preprocessing the data...')
+    df = preprocessing(df)
+    df = df.drop('state', axis=1)
+    x_pred = df 
+    print('Predicting the outcome...')
+    y_pred = model.predict(x_pred)
+    y_pred = y_pred.round(2)
+    print('Predicting probabilities for success...')
+    y_pred_proba = model.predict_proba(x_pred)
+    y_pred_new = []
+    for pred in y_pred:
+        if pred == 1:
+            y_pred_new.append('success')
+        else:
+            y_pred_new.append('failure')
+    print('The predicted outcome of your project:', y_pred_new)
+    print('The predicted probability of your project being successful:', (y_pred_proba[:, 1] * 100).round(2), '%')
+    print(model.feature_importances_.argsort())
+    return y_pred_new
 
-y_test_pred = loaded_model.predict(X_test)
-mse_test = mean_squared_error(y_test, y_test_pred)
-print (f"MSE on test is: {mse_test}")
+
+if __name__ == "__main__":
+    app()
